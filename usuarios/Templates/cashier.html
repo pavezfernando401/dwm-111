@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caja Virtual - Al Sahara</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../core/styles.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-utensils"></i> Al Sahara
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto" id="navMenu"></ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+
+    <!-- Cashier Content -->
+    <div class="container mt-4 mb-5">
+        <h2 class="mb-4"><i class="fas fa-cash-register"></i> Caja Virtual</h2>
+        
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="list-group">
+                    <button class="list-group-item list-group-item-action active" onclick="filterCashier('card')">
+                        <i class="fas fa-credit-card"></i> Pedidos por Tarjeta
+                    </button>
+                    <button class="list-group-item list-group-item-action" onclick="filterCashier('transfer')">
+                        <i class="fas fa-exchange-alt"></i> Pedidos por Transferencia
+                    </button>
+                    <button class="list-group-item list-group-item-action" onclick="filterCashier('cash')">
+                        <i class="fas fa-money-bill-wave"></i> Pedidos por Efectivo
+                    </button>
+                    <button class="list-group-item list-group-item-action" onclick="filterCashier('pending')">
+                        <i class="fas fa-clock"></i> Pendientes de Pago
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-9">
+                <div id="cashierOrders"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+function getAuth(){ try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } }
+async function toggleActivo(id, activo){
+  const u = getAuth();
+  if(!u?.token){ alert("Debes iniciar sesión"); return; }
+  const res = await fetch(`http://localhost:3001/api/productos/${id}/activo`,{
+    method:"PATCH",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization": "Bearer " + u.token
+    },
+    body: JSON.stringify({ activo }) // 1 o 0
+  });
+  if(!res.ok){ alert("Sin permiso o error"); return; }
+  // refresca lista
+  cargarProductosCajero();
+}
+</script>
+
+</body>
+</html>

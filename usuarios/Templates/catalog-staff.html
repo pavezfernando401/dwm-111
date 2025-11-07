@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Menú (Staff) — Al Sahara</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <!-- Ajusta esta ruta si tu CSS está en otro lado -->
+  <link rel="stylesheet" href="./core/styles.css">
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
+      <div id="navActions" class="d-flex flex-wrap gap-2"></div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+      <h1 class="h3 mb-0"><i class="fa-solid fa-clipboard-list me-2"></i>Menú (Staff)</h1>
+      <input id="searchInput" class="form-control" placeholder="Buscar productos..." style="max-width: 320px;">
+    </div>
+
+    <div class="btn-group mb-3">
+      <button class="btn btn-outline-secondary filter-btn active" data-category="all">Todos</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Shawarma">Shawarmas</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Falafel">Falafel</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Kebab">Kebab</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Salsa">Salsa</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Bebida">Bebidas</button>
+    </div>
+
+    <h4 class="mt-2">Listado</h4>
+    <div id="productsGrid" class="row"></div>
+
+    <div class="d-flex align-items-center gap-3 my-3">
+      <button id="prevPage" class="btn btn-outline-primary btn-sm">Anterior</button>
+      <span id="pageInfo">Página 1 de 1</span>
+      <button id="nextPage" class="btn btn-outline-primary btn-sm">Siguiente</button>
+    </div>
+  </main>
+
+  <!-- Modal detalle -->
+  <div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="modalProductName" class="modal-title"></h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="modalProductImage" class="mb-3"></div>
+          <div id="modalProductPrice" class="fs-5 fw-bold text-primary mb-2"></div>
+          <div id="modalProductStock" class="alert p-2"></div>
+          <h6>Ingredientes</h6>
+          <ul id="modalProductIngredients" class="mb-0"></ul>
+        </div>
+        <div class="modal-footer">
+          <button id="modalToggle" class="btn"></button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  (() => {
+    const API = "http://127.0.0.1:3001";
+    const qs = (s, p=document) => p.querySelector(s);
+    const qsa = (s, p=document) => [...p.querySelectorAll(s)];
+
+    const grid = qs("#productsGrid");
+    const searchInput = qs("#searchInput");
+    const filterBtns = qsa(".filter-btn");
+    const pageInfo = qs("#pageInfo");
+    const prevBtn = qs("#prevPage");
+    const nextBtn = qs("#nextPage");
+    const navActions = qs("#navActions");
+
+    const modalEl = qs("#productModal");
+    const modal = new bootstrap.Modal(modalEl);
+    const modalName = qs("#modalProductName");
+    const modalPrice = qs("#modalProductPrice");
+    const modalImage = qs("#modalProductImage");
+    const modalIngr = qs("#modalProductIngredients");
+    const modalStock = qs("#modalProductStock");
+    const modalToggle = qs("#modalToggle");
+
+    let sessionUser = null;
+    let state = { q: "", category: "all", page: 1, pages: 1 };
+
+    async function whoami(){
+      const r = await fetch(API + "/api/auth/me", { credentials: "include" });
+      const { user } = await r.json();
+      sessionUser = user ?? null;
+
+      // Guard: solo staff
+      if (!sessionUser) return location.replace("login.html?redirect=catalog-staff.html");
+      if (!(sessionUser.role === "admin" || sessionUser.role === "cajero")) {
+        return location.replace("catalog-client.html");
+      }
+
+      // Navbar para staff (si es admin, incluye Reportes) REVISAR BOTON PARA IR AL INDEX
+      navActions.innerHTML = `
+        <a class="navbar-brand" href="index.html"><i class="fa-solid fa-utensils"></i> Al Sahara</a>  
+        <a class="btn btn-outline-light btn-sm" href="catalog-staff.html">Menú</a>
+        <a class="btn btn-outline-light btn-sm" href="cashier.html">Manejar pedidos</a>
+        <a class="btn btn-outline-light btn-sm" href="dispatch.html">Manejar despachos</a>
+        <a class="btn btn-outline-light btn-sm" href="admin-register.html">Registrar cliente</a>
+        ${sessionUser.role === 'admin' ? '<a class="btn btn-outline-light btn-sm" href="reports.html">Reportes</a>' : ''}
+        <button class="btn btn-warning btn-sm" id="btnLogout">Cerrar sesión</button>
+      `;
+      qs("#btnLogout")?.addEventListener("click", async () => {
+        await fetch(API + "/api/auth/logout", { method: "POST", credentials: "include" });
+        location.href = "login.html";
+      });
+    }
+
+    function renderCard(p){
+      const tags = (p.tags ?? []).map(t => `<span class="badge text-bg-secondary me-1">${t}</span>`).join("");
+      const badge = p.featured ? `<span class="badge text-bg-warning ms-2"><i class="fa fa-star"></i> Destacado</span>` : "";
+      const stock = p.available ? `<span class="badge text-bg-success">Disponible</span>` : `<span class="badge text-bg-danger">Agotado</span>`;
+      return `
+        <div class="col-md-4 col-lg-3 mb-4">
+          <div class="card h-100 shadow-sm">
+            <img src="${p.imagen}" class="card-img-top" alt="${p.nombre}" style="height:180px; object-fit:cover">
+            <div class="card-body d-flex flex-column">
+              <h5 class="card-title mb-1">${p.nombre} ${badge}</h5>
+              <div class="mb-2 small">${tags}</div>
+              <div class="mb-2">${stock}</div>
+              <p class="card-text text-primary fw-bold mb-3">$${p.price}</p>
+              <div class="mt-auto d-grid gap-2">
+                <button class="btn btn-outline-primary" data-action="ver" data-id="${p.id}">
+                  <i class="fa fa-eye"></i> Ver detalle
+                </button>
+                <button class="btn ${p.available ? "btn-outline-danger" : "btn-outline-success"}" data-action="toggle" data-id="${p.id}" data-available="${p.available?1:0}">
+                  ${p.available ? '<i class="fa fa-ban"></i> Marcar Agotado' : '<i class="fa fa-check"></i> Marcar Disponible'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function fetchProducts(){
+      const params = new URLSearchParams();
+      if (state.q) params.set("q", state.q);
+      if (state.category && state.category !== "all") params.set("category", state.category);
+      params.set("page", state.page);
+      params.set("limit", 12);
+      const url = API + "/api/productos?" + params.toString();
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("No se pudo cargar productos");
+      return res.json();
+    }
+
+    async function load(){
+      await whoami();
+      const { items, page, pages } = await fetchProducts();
+      grid.innerHTML = items.map(renderCard).join("");
+      state.pages = pages;
+      pageInfo.textContent = `Página ${page} de ${pages}`;
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= pages;
+    }
+
+    // Handlers
+    searchInput?.addEventListener("input", (e) => { state.q = e.target.value.trim(); state.page = 1; load().catch(console.error); });
+    filterBtns.forEach(btn => btn.addEventListener("click", () => {
+      filterBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.category = btn.dataset.category || "all";
+      state.page = 1;
+      load().catch(console.error);
+    }));
+    prevBtn.addEventListener("click", () => { if (state.page>1){ state.page--; load().catch(console.error);} });
+    nextBtn.addEventListener("click", () => { if (state.page<state.pages){ state.page++; load().catch(console.error);} });
+
+    document.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      const action = btn.dataset.action;
+
+      if (action === "ver") {
+        const r = await fetch(`${API}/api/productos/${id}`, { credentials: "include" });
+        const p = await r.json();
+        modalName.textContent = p.nombre;
+        modalPrice.textContent = `$${p.price}`;
+        modalImage.innerHTML = `<img src="${p.imagen}" class="img-fluid rounded">`;
+        modalIngr.innerHTML = (p.ingredients || []).map(i => `<li>${i}</li>`).join("");
+        modalStock.className = "alert " + (p.available ? "alert-success" : "alert-danger");
+        modalStock.textContent = p.available ? "Disponible" : "Agotado";
+
+        modalToggle.className = "btn " + (p.available ? "btn-outline-danger" : "btn-outline-success");
+        modalToggle.innerHTML = p.available ? '<i class="fa fa-ban"></i> Marcar Agotado' : '<i class="fa fa-check"></i> Marcar Disponible';
+        modalToggle.onclick = async () => {
+          await toggleAvailability(id, p.available ? 0 : 1);
+          modal.hide();
+          load().catch(console.error);
+        };
+
+        modal.show();
+      }
+
+      if (action === "toggle") {
+        const current = btn.getAttribute("data-available") === "1";
+        await toggleAvailability(id, current ? 0 : 1);
+        load().catch(console.error);
+      }
+    });
+
+    async function toggleAvailability(id, available){
+      const res = await fetch(`${API}/api/productos/${id}/available`, {
+        method: "PATCH",
+        headers: { "Content-Type":"application/json" },
+        credentials: "include",
+        body: JSON.stringify({ available })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        alert(err?.error || "Error al cambiar disponibilidad");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => load().catch(console.error));
+  })();
+  </script>
+</body>
+</html>

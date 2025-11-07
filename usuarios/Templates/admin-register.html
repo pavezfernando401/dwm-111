@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Cliente - Al Sahara</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../core/styles.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-utensils"></i> Al Sahara
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto" id="navMenu"></ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+
+    <!-- Admin Register Content -->
+    <div class="container mt-4 mb-5">
+        <h2 class="mb-4"><i class="fas fa-user-plus"></i> Registrar Cliente</h2>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        
+                        <form id="adminRegisterForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Nombre Completo *</label>
+                                    <input type="text" class="form-control" id="adminRegName" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">RUT *</label>
+                                    <input type="text" class="form-control" id="adminRegRut" placeholder="12.345.678-9" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Email *</label>
+                                    <input type="email" class="form-control" id="adminRegEmail" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Teléfono *</label>
+                                    <input type="tel" class="form-control" id="adminRegPhone" placeholder="+56 9 XXXX XXXX" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Dirección *</label>
+                                <input type="text" class="form-control" id="adminRegAddress" required>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Fecha de Nacimiento</label>
+                                    <input type="date" class="form-control" id="adminRegBirthdate">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Sexo</label>
+                                    <select class="form-select" id="adminRegGender">
+                                        <option value="">Seleccionar</option>
+                                        <option value="Hombre">Hombre</option>
+                                        <option value="Mujer">Mujer</option>
+                                        <option value="Otro">Otro</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Contraseña *</label>
+                                <input type="password" class="form-control" id="adminRegPassword" required>
+                                <div class="form-text">Mínimo 8 caracteres, 1 mayúscula y 1 dígito</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-rounded">
+                                <i class="fas fa-user-plus"></i> Registrar Cliente
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-rounded ms-2" onclick="document.getElementById('adminRegisterForm').reset()">
+                                <i class="fas fa-redo"></i> Limpiar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

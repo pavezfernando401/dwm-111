@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Al Sahara</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../core/styles.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-utensils"></i> Al Sahara
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto" id="navMenu"></ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+
+    <!-- Checkout Content -->
+    <div class="container mt-4 mb-5">
+        <h2 class="mb-4"><i class="fas fa-credit-card"></i> Finalizar Pedido</h2>
+        
+        <div class="row">
+            <div class="col-md-7">
+                <!-- Tipo de Entrega -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="mb-3">Tipo de Entrega</h5>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="deliveryType" id="deliveryHome" value="Entrega" checked>
+                            <label class="form-check-label" for="deliveryHome">
+                                <i class="fas fa-truck"></i> Entrega a domicilio
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="deliveryType" id="deliveryPickup" value="Retiro en tienda">
+                            <label class="form-check-label" for="deliveryPickup">
+                                <i class="fas fa-store"></i> Retiro en tienda
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Método de Pago -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="mb-3">Método de Pago</h5>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Tarjeta" checked>
+                            <label class="btn btn-outline-primary text-start" for="payCard">
+                                <i class="fas fa-credit-card me-2"></i> Tarjeta (WebPay)
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payTransfer" value="Transferencia">
+                            <label class="btn btn-outline-primary text-start" for="payTransfer">
+                                <i class="fas fa-exchange-alt me-2"></i> Transferencia Bancaria
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Efectivo">
+                            <label class="btn btn-outline-primary text-start" for="payCash">
+                                <i class="fas fa-money-bill-wave me-2"></i> Efectivo a la entrega
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-5">
+                <div class="card sticky-top" style="top: 80px;">
+                    <div class="card-body">
+                        <h5>Resumen del Pedido</h5>
+                        <hr>
+                        <div id="checkoutSummary"></div>
+                        <hr>
+                        <!-- Estimación de entrega -->
+                        <div class="alert alert-info" id="deliveryEstimate">
+                            <i class="fas fa-clock"></i> <strong>Entrega estimada:</strong> 35 minutos
+                        </div>
+                        <button class="btn btn-success w-100 btn-rounded" id="confirmOrderBtn">
+                            <i class="fas fa-check-circle"></i> Confirmar Pedido
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    // Script inline para asegurar que funcione
+    window.addEventListener('DOMContentLoaded', function() {
+        console.log('Checkout cargado');
+        
+        // Verificar autenticación
+        const user = AuthManager.checkSession();
+        if (!user) {
+            alert('Debes iniciar sesión');
+            window.location.href = 'login.html';
+            return;
+        }
+
+        if (user.role !== 'customer') {
+            alert('Solo clientes pueden hacer pedidos');
+            window.location.href = '../index.html';
+            return;
+        }
+
+        // Verificar carrito
+        const cart = StorageManager.getCart();
+        if (!cart.items || cart.items.length === 0) {
+            alert('Tu carrito está vacío');
+            window.location.href = 'cart.html';
+            return;
+        }
+
+        // Renderizar resumen
+        renderCheckoutSummary();
+
+        // Event listeners
+        setupEventListeners();
+    });
+
+    function renderCheckoutSummary() {
+        const cart = StorageManager.getCart();
+        const products = StorageManager.getProducts();
+        const user = AuthManager.checkSession();
+        
+        let subtotal = 0;
+        const items = cart.items.map(item => {
+            const product = products.find(p => p.id === item.productId);
+            if (product) {
+                subtotal += product.price * item.quantity;
+                return `<li>${item.quantity}x ${product.name}</li>`;
+            }
+            return '';
+        }).join('');
+
+        const tax = Math.round(subtotal * 0.19);
+        const total = subtotal + tax;
+
+        const summary = document.getElementById('checkoutSummary');
+        summary.innerHTML = `
+            <div class="mb-2"><strong>Dirección:</strong><br>${user.address}</div>
+            <div class="mb-2"><strong>Productos:</strong></div>
+            <ul class="small mb-3">${items}</ul>
+            <div class="d-flex justify-content-between mb-2">
+                <span>Subtotal:</span>
+                <span>${subtotal.toLocaleString('es-CL')}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span>IVA (19%):</span>
+                <span>${tax.toLocaleString('es-CL')}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+                <strong>Total:</strong>
+                <strong>${total.toLocaleString('es-CL')}</strong>
+            </div>
+        `;
+    }
+
+    function setupEventListeners() {
+        // Cambio de tipo de entrega
+        document.querySelectorAll('input[name="deliveryType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const estimate = document.getElementById('deliveryEstimate');
+                if (this.value === 'Retiro en tienda') {
+                    estimate.innerHTML = '<i class="fas fa-clock"></i> <strong>Tiempo estimado:</strong> 15 minutos';
+                } else {
+                    estimate.innerHTML = '<i class="fas fa-clock"></i> <strong>Entrega estimada:</strong> 35 minutos';
+                }
+            });
+        });
+
+        // Botón confirmar pedido
+        const confirmBtn = document.getElementById('confirmOrderBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', processPayment);
+            console.log('Botón conectado');
+        } else {
+            console.error('No se encontró el botón');
+        }
+    }
+
+    function processPayment() {
+        console.log('Procesando pago...');
+        
+        const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+        const deliveryType = document.querySelector('input[name="deliveryType"]:checked').value;
+        
+        const user = AuthManager.checkSession();
+        const cart = StorageManager.getCart();
+        const products = StorageManager.getProducts();
+        
+        // Calcular totales
+        let subtotal = 0;
+        const orderItems = cart.items.map(item => {
+            const product = products.find(p => p.id === item.productId);
+            subtotal += product.price * item.quantity;
+            return {
+                productId: item.productId,
+                name: product.name,
+                quantity: item.quantity,
+                price: product.price
+            };
+        });
+
+        const tax = Math.round(subtotal * 0.19);
+        const total = subtotal + tax;
+        const orderId = parseInt(localStorage.getItem('nextOrderId') || '1024');
+        localStorage.setItem('nextOrderId', (orderId + 1).toString());
+
+        const estimatedTime = deliveryType === 'Retiro en tienda' ? 15 : 35;
+
+        // Crear orden
+        const order = {
+            id: orderId,
+            orderNumber: `#${orderId}`,
+            userId: user.id,
+            customerName: user.name,
+            customerEmail: user.email,
+            address: user.address,
+            phone: user.phone,
+            items: orderItems,
+            subtotal,
+            tax,
+            total,
+            paymentMethod,
+            paymentStatus: paymentMethod === 'Tarjeta' ? 'Pagado' : (paymentMethod === 'Efectivo' ? 'Pago a la entrega' : 'Pendiente de comprobante'),
+            orderStatus: paymentMethod === 'Tarjeta' ? 'En preparación' : 'Pendiente',
+            deliveryType,
+            estimatedTime,
+            receiptUrl: null,
+            createdAt: new Date().toISOString(),
+            notifications: []
+        };
+
+        // Guardar orden
+        const orders = StorageManager.getOrders();
+        orders.push(order);
+        StorageManager.saveOrders(orders);
+
+        // Limpiar carrito
+        StorageManager.clearCart();
+
+        // Mostrar mensaje según método de pago
+        if (paymentMethod === 'Tarjeta') {
+            showToast('Procesando pago con tarjeta...', 'info');
+            setTimeout(() => {
+                showToast('¡Pago exitoso! Pedido confirmado', 'success');
+                setTimeout(() => {
+                    window.location.href = 'orders.html';
+                }, 1500);
+            }, 2000);
+        } else if (paymentMethod === 'Transferencia') {
+            alert(`Pedido ${order.orderNumber} creado exitosamente.\n\nDatos de transferencia:\nBanco: Banco Chile\nCuenta Corriente: 121274455\nRUT: 12.123.234-0\nMonto: ${total.toLocaleString('es-CL')}\n\nDeberás subir el comprobante para que tu pedido sea procesado.`);
+            window.location.href = 'orders.html';
+        } else {
+            showToast('Pedido confirmado. Pago en efectivo a la entrega', 'success');
+            setTimeout(() => {
+                window.location.href = 'orders.html';
+            }, 1500);
+        }
+    }
+    </script>
+</body>
+</html>

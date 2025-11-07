@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Menú (Cliente) — Al Sahara</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <!-- Ajusta esta ruta si tu CSS está en otro lado -->
+  <link rel="stylesheet" href="./core/styles.css">
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
+      <div id="navActions" class="d-flex flex-wrap gap-2"></div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+      <h1 class="h3 mb-0"><i class="fa-regular fa-bookmark me-2"></i>Nuestro Menú (Cliente)</h1>
+      <input id="searchInput" class="form-control" placeholder="Buscar productos..." style="max-width: 320px;">
+    </div>
+
+    <div class="btn-group mb-3">
+      <button class="btn btn-outline-secondary filter-btn active" data-category="all">Todos</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Shawarma">Shawarmas</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Falafel">Falafel</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Kebab">Kebab</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Salsa">Salsa</button>
+      <button class="btn btn-outline-secondary filter-btn" data-category="Bebida">Bebidas</button>
+    </div>
+
+    <section id="featuredSection" style="display:none">
+      <h4 class="mt-2">Destacados</h4>
+      <div id="featuredProducts" class="row"></div>
+    </section>
+
+    <h4 class="mt-4">Nuestro Menú</h4>
+    <div id="productsGrid" class="row"></div>
+
+    <div class="d-flex align-items-center gap-3 my-3">
+      <button id="prevPage" class="btn btn-outline-primary btn-sm">Anterior</button>
+      <span id="pageInfo">Página 1 de 1</span>
+      <button id="nextPage" class="btn btn-outline-primary btn-sm">Siguiente</button>
+    </div>
+  </main>
+
+  <!-- Modal detalle -->
+  <div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="modalProductName" class="modal-title"></h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="modalProductImage" class="mb-3"></div>
+          <div id="modalProductPrice" class="fs-5 fw-bold text-primary mb-2"></div>
+          <div id="modalProductStock" class="alert p-2"></div>
+          <h6>Ingredientes</h6>
+          <ul id="modalProductIngredients" class="mb-0"></ul>
+        </div>
+        <div class="modal-footer">
+          <button id="modalAddToCart" class="btn btn-primary">
+            <i class="fa fa-cart-plus"></i> Añadir al carrito
+          </button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  (() => {
+    const API = "http://127.0.0.1:3001";
+    const qs = (s, p=document) => p.querySelector(s);
+    const qsa = (s, p=document) => [...p.querySelectorAll(s)];
+
+    // refs UI
+    const grid = qs("#productsGrid");
+    const featuredSection = qs("#featuredSection");
+    const featuredWrap = qs("#featuredProducts");
+    const searchInput = qs("#searchInput");
+    const filterBtns = qsa(".filter-btn");
+    const pageInfo = qs("#pageInfo");
+    const prevBtn = qs("#prevPage");
+    const nextBtn = qs("#nextPage");
+    const navActions = qs("#navActions");
+
+    // modal
+    const modalEl = qs("#productModal");
+    const modal = new bootstrap.Modal(modalEl);
+    const modalName = qs("#modalProductName");
+    const modalPrice = qs("#modalProductPrice");
+    const modalImage = qs("#modalProductImage");
+    const modalIngr = qs("#modalProductIngredients");
+    const modalStock = qs("#modalProductStock");
+    const modalAdd = qs("#modalAddToCart");
+
+    let sessionUser = null;
+    let state = { q: "", category: "all", page: 1, pages: 1, onlyAvailable: 1 };
+
+    async function whoami(){
+      try {
+        const r = await fetch(API + "/api/auth/me", { credentials: "include" });
+        const { user } = await r.json();
+        sessionUser = user ?? null;
+
+        // Staff no debe estar aquí
+        if (sessionUser && (sessionUser.role === "admin" || sessionUser.role === "cajero")) {
+          location.replace("catalog-staff.html");
+          throw new Error("redirecting");
+        }
+
+        // Render navbar (cliente o invitado) REVISAR BOTON PARA IR AL INDEX
+        navActions.innerHTML = sessionUser ? (`
+          <a class="navbar-brand" href="index.html"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
+          <a class="btn btn-outline-light btn-sm" href="catalog-client.html">Menú</a>
+          <a class="btn btn-outline-light btn-sm" href="orders.html">Mis órdenes</a>
+          <a class="btn btn-outline-light btn-sm" href="cart.html">Carrito</a>
+          <a class="btn btn-outline-light btn-sm" href="profile.html">Mi perfil</a>
+          <button class="btn btn-warning btn-sm" id="btnLogout">Cerrar sesión</button>
+        `) : (`
+          <a class="btn btn-warning btn-sm" href="login.html?redirect=catalog-client.html">Iniciar sesión</a>
+        `);
+
+        qs("#btnLogout")?.addEventListener("click", async () => {
+          await fetch(API + "/api/auth/logout", { method: "POST", credentials: "include" });
+          location.href = "login.html";
+        });
+      } catch { sessionUser = null; }
+    }
+
+    function renderCard(p){
+      const tags = (p.tags ?? []).map(t => `<span class="badge text-bg-secondary me-1">${t}</span>`).join("");
+      const badge = p.featured ? `<span class="badge text-bg-warning ms-2"><i class="fa fa-star"></i> Destacado</span>` : "";
+      const stock = p.available ? `<span class="badge text-bg-success">Disponible</span>` : `<span class="badge text-bg-danger">Agotado</span>`;
+      return `
+        <div class="col-md-4 col-lg-3 mb-4">
+          <div class="card h-100 shadow-sm">
+            <img src="${p.imagen}" class="card-img-top" alt="${p.nombre}" style="height:180px; object-fit:cover">
+            <div class="card-body d-flex flex-column">
+              <h5 class="card-title mb-1">${p.nombre} ${badge}</h5>
+              <div class="mb-2 small">${tags}</div>
+              <div class="mb-2">${stock}</div>
+              <p class="card-text text-primary fw-bold mb-3">$${p.price}</p>
+              <div class="mt-auto d-grid gap-2">
+                <button class="btn btn-outline-primary" data-action="ver" data-id="${p.id}">
+                  <i class="fa fa-eye"></i> Ver detalle
+                </button>
+                <button class="btn btn-primary" data-action="add" data-id="${p.id}" ${p.available ? "" : "disabled"}>
+                  <i class="fa fa-cart-plus"></i> Añadir al carrito
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function fetchProducts(){
+      const params = new URLSearchParams();
+      if (state.q) params.set("q", state.q);
+      if (state.category && state.category !== "all") params.set("category", state.category);
+      params.set("onlyAvailable", "1"); // cliente ve solo disponibles
+      params.set("page", state.page);
+      params.set("limit", 12);
+      const url = API + "/api/productos?" + params.toString();
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("No se pudo cargar productos");
+      return res.json();
+    }
+
+    async function load(){
+      await whoami();
+      const { items, page, pages } = await fetchProducts();
+
+      const featured = items.filter(i => i.featured && i.available);
+      if (featured.length) {
+        featuredSection.style.display = "";
+        featuredWrap.innerHTML = featured.map(renderCard).join("");
+      } else {
+        featuredSection.style.display = "none";
+        featuredWrap.innerHTML = "";
+      }
+
+      grid.innerHTML = items.map(renderCard).join("");
+
+      state.pages = pages;
+      pageInfo.textContent = `Página ${page} de ${pages}`;
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= pages;
+    }
+
+    // Handlers
+    searchInput?.addEventListener("input", (e) => { state.q = e.target.value.trim(); state.page = 1; load().catch(console.error); });
+    filterBtns.forEach(btn => btn.addEventListener("click", () => {
+      filterBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.category = btn.dataset.category || "all";
+      state.page = 1;
+      load().catch(console.error);
+    }));
+    prevBtn.addEventListener("click", () => { if (state.page>1){ state.page--; load().catch(console.error);} });
+    nextBtn.addEventListener("click", () => { if (state.page<state.pages){ state.page++; load().catch(console.error);} });
+
+    document.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      const action = btn.dataset.action;
+
+      if (action === "ver") {
+        const r = await fetch(`${API}/api/productos/${id}`, { credentials: "include" });
+        const p = await r.json();
+        modalName.textContent = p.nombre;
+        modalPrice.textContent = `$${p.price}`;
+        modalImage.innerHTML = `<img src="${p.imagen}" class="img-fluid rounded">`;
+        modalIngr.innerHTML = (p.ingredients || []).map(i => `<li>${i}</li>`).join("");
+        modalStock.className = "alert " + (p.available ? "alert-success" : "alert-danger");
+        modalStock.textContent = p.available ? "Disponible" : "Agotado";
+        modalAdd.disabled = !p.available;
+        modalAdd.onclick = () => addToCart(id).catch(console.error);
+        modal.show();
+      }
+
+      if (action === "add") {
+        await addToCart(id);
+      }
+    });
+
+    async function addToCart(producto_id){
+      const res = await fetch(`${API}/api/carrito/items`, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        credentials: "include",
+        body: JSON.stringify({ producto_id, cantidad: 1 })
+      });
+      if (!res.ok) { alert("Inicia sesión o intenta más tarde."); return; }
+      alert("Producto añadido al carrito");
+    }
+
+    document.addEventListener("DOMContentLoaded", () => load().catch(console.error));
+  })();
+  </script>
+</body>
+</html>
