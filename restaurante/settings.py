@@ -37,13 +37,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Apps de terceros
+    'rest_framework',
+    'corsheaders',
+
+    # Tus apps
+    'usuarios',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+   # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -74,11 +82,14 @@ WSGI_APPLICATION = 'restaurante.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'al_sahara_db',   # ¡Tu base de datos!
+        'USER': 'root',          # Tu usuario de MySQL
+        'PASSWORD': '1234',          # Tu contraseña de MySQL
+        'HOST': 'localhost',
+        'PORT': '3306',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -120,3 +131,24 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Permite que el frontend (en 127.0.0.1:3001) haga peticiones
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:3001",
+    "http://localhost:3001",
+]
+# Permite que el frontend envíe cookies (para el login)
+CORS_ALLOW_CREDENTIALS = True
+
+# --- Configuración de Django REST Framework ---
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Esto permite que la API use las sesiones creadas por login()
+        'rest_framework.authentication.SessionAuthentication', 
+    ],
+}
+
+# Define explícitamente el backend de autenticación
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
