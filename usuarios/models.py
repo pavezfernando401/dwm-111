@@ -2,6 +2,7 @@
 
 from django.db import models
 from django.contrib.auth.models import User # Importamos el modelo User de Django
+from decimal import Decimal
 
 # Modelo para las Categorías de Productos
 class Categoria(models.Model):
@@ -40,7 +41,7 @@ class Pedido(models.Model):
     ]
 
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pedidos')
-    total = models.IntegerField()
+    total = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
     metodo_pago = models.CharField(max_length=20, choices=PAGO_CHOICES)
     direccion_entrega = models.CharField(max_length=255)
@@ -52,12 +53,19 @@ class Pedido(models.Model):
 # Modelo para los Items de un Pedido (los productos dentro del carrito)
 class ItemPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='items')
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.SET_NULL, null=True) 
     cantidad = models.IntegerField()
-    precio_en_pedido = models.IntegerField() # Guarda el precio al momento de la compra
-    
+    precio_en_pedido = models.IntegerField()
+    nombre_producto = models.CharField(max_length=200, blank=True) 
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.nombre_producto = self.producto.nombre
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f'{self.cantidad}x {self.producto.nombre} en Pedido #{self.pedido.id}'
+        nombre = self.nombre_producto if self.nombre_producto else (self.producto.nombre if self.producto else "Producto eliminado")
+        return f'{self.cantidad}x {nombre} en Pedido #{self.pedido.id}'
     
     # Modelo para el Carrito de Compras
 class Carrito(models.Model):

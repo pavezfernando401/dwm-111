@@ -1,5 +1,6 @@
 # En usuarios/views.py
-
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
@@ -8,14 +9,23 @@ from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import viewsets, status, generics
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes, action, authentication_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.authentication import SessionAuthentication
 
 from .models import Producto, Categoria, Pedido, ItemPedido, Carrito, ItemCarrito
 from .serializers import (
     ProductoSerializer, CategoriaSerializer, PedidoSerializer, 
     UserSerializer, CarritoSerializer, ItemCarritoSerializer
 )
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """
+    Esta clase es idéntica a SessionAuthentication pero
+    desactiva la validación CSRF de DRF.
+    """
+    def enforce_csrf(self, request):
+        return  # No hacer nada (se salta la validación CSRF)
 
 # --- Vistas de Autenticación ---
 
@@ -43,6 +53,7 @@ def register_view(request):
 
 @csrf_exempt  # <-- Asegúrate que esto siga aquí
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def login_view(request):
     """
@@ -73,8 +84,9 @@ def login_view(request):
         # Si user es None (ya sea por email o pass incorrecta), falla.
         return Response({'error': 'Credenciales inválidas'}, status=status.HTTP_400_BAD_REQUEST)
 
-
+@csrf_exempt
 @api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([IsAuthenticated]) # Solo usuarios logueados pueden cerrar sesión
 def logout_view(request):
     """
@@ -123,8 +135,9 @@ class ProductoViewSet(viewsets.ReadOnlyModelViewSet):
              queryset = queryset.filter(disponible=True)
 
         return queryset
-
+@csrf_exempt
 @api_view(['PATCH'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([IsAdminUser]) # Asumimos que solo Admin/Staff pueden cambiar esto
 def toggle_product_availability(request, pk):
     """
@@ -147,12 +160,12 @@ def toggle_product_availability(request, pk):
 
 
 # --- Vistas de Carrito ---
-
 class CarritoViewSet(viewsets.ViewSet):
     """
     API para el Carrito de Compras.
     Requiere que el usuario esté autenticado.
     """
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get_cart(self, request):
@@ -258,23 +271,28 @@ class CarritoViewSet(viewsets.ViewSet):
 # --- Vistas de Pedidos ---
 
 class PedidoViewSet(viewsets.ViewSet):
-    """
-    API para Pedidos.
-    """
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsAuthenticated]
 
+    # --- FUNCIÓN DE AYUDA (para buscar Pedidos por ID) ---
+    def get_object(self, pk=None):
+        try:    
+            return Pedido.objects.get(pk=pk)
+        except Pedido.DoesNotExist:
+            raise Http404
+
+    # --- API para /api/pedidos/ (GET, para clientes) ---
     def list(self, request):
         """
-        GET /api/pedidos
         Devuelve la lista de pedidos del usuario logueado.
         """
         pedidos = Pedido.objects.filter(usuario=request.user).order_by('-fecha_creacion')
         serializer = PedidoSerializer(pedidos, many=True)
         return Response(serializer.data)
 
+    # --- API para /api/pedidos/ (POST, para clientes) ---
     def create(self, request):
         """
-        POST /api/pedidos
         Crea un nuevo pedido a partir del carrito del usuario.
         """
         carrito = get_object_or_404(Carrito, usuario=request.user)
@@ -286,15 +304,22 @@ class PedidoViewSet(viewsets.ViewSet):
         # Usamos una transacción para asegurar que si algo falla, no se cree el pedido
         try:
             with transaction.atomic():
-                # 1. Calcular el total
-                total = sum(item.producto.precio * item.cantidad for item in items_carrito)
+                total = sum(int(item.producto.precio) * int(item.cantidad) for item in items_carrito)
+                metodo_pago = request.data.get('metodo_pago', 'TARJETA') # Leemos el método de pago
                 
+                # --- ¡NUEVA LÓGICA DE ESTADO AUTOMÁTICO! ---
+                # Tarjeta y Efectivo (pago en entrega) se aprueban al instante.
+                # Transferencia queda Pendiente para que la Caja la revise.
+                if metodo_pago in ['TARJETA', 'EFECTIVO']:
+                    estado_inicial = 'EN PREPARACION'
+                else: # (metodo_pago == 'TRANSFERENCIA')
+                    estado_inicial = 'PENDIENTE'
                 # 2. Crear el Pedido
                 pedido = Pedido.objects.create(
                     usuario=request.user,
                     total=total,
                     metodo_pago=request.data.get('metodo_pago', 'TARJETA'),
-                    direccion_entrega=request.data.get('direccion_entrega', 'Dirección de prueba') # Idealmente tomar esto del perfil del usuario
+                    direccion_entrega=request.data.get('direccion_entrega', 'Dirección de prueba')
                 )
                 
                 # 3. Mover items del carrito a ItemPedido
@@ -303,7 +328,7 @@ class PedidoViewSet(viewsets.ViewSet):
                         pedido=pedido,
                         producto=item_c.producto,
                         cantidad=item_c.cantidad,
-                        precio_en_pedido=item_c.producto.precio
+                        precio_en_pedido=int(item_c.producto.precio)
                     )
                 
                 # 4. Limpiar el carrito
@@ -315,3 +340,52 @@ class PedidoViewSet(viewsets.ViewSet):
 
         except Exception as e:
             return Response({'error': f'Error al crear el pedido: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # --- API para /api/pedidos/active_orders/ (GET, para Caja) ---
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def active_orders(self, request):
+        """
+        Devuelve una lista de pedidos activos (Pendientes o En Preparación)
+        para la vista de Caja.
+        """
+        pedidos = Pedido.objects.filter(
+            estado__in=['PENDIENTE', 'EN PREPARACION']
+        ).order_by('fecha_creacion')
+        
+        serializer = PedidoSerializer(pedidos, many=True)
+        return Response(serializer.data)
+
+    # --- API PARA /api/pedidos/dispatch_list/ (GET, para Despacho) ---
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def dispatch_list(self, request):
+        """
+        Devuelve pedidos 'En Preparación' y 'En Camino' para Despacho.
+        """
+        pedidos = Pedido.objects.filter(
+            estado__in=['EN PREPARACION', 'EN CAMINO']
+        ).order_by('fecha_creacion')
+        
+        serializer = PedidoSerializer(pedidos, many=True)
+        return Response(serializer.data)
+
+    # --- API PARA /api/pedidos/<id>/update_status/ (PATCH, para Staff) ---
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
+    def update_status(self, request, pk=None):
+        """
+        Permite al staff actualizar el estado de un pedido.
+        """
+        pedido = self.get_object(pk=pk)
+        new_status = request.data.get('estado')
+
+        if not new_status:
+            return Response({'error': 'Falta el campo "estado"'}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_states = [choice[0] for choice in Pedido.ESTADO_CHOICES]
+        if new_status not in valid_states:
+            return Response({'error': 'Estado no válido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pedido.estado = new_status
+        pedido.save()
+        
+        serializer = PedidoSerializer(pedido)
+        return Response(serializer.data)

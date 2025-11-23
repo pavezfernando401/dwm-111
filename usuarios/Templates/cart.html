@@ -47,6 +47,174 @@
         <button id="checkout" class="btn btn-primary">Finalizar compra</button>
       </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   </main>
+    <script>
+        const API_URL = 'http://127.0.0.1:8000/api';
+        let usuarioLogueado = null;
 
+        // --- Elementos del DOM ---
+        const cartTableBody = document.querySelector('#cart-table tbody');
+        const emptyMessage = document.getElementById('empty');
+        const totalElement = document.getElementById('total');
+        const clearButton = document.getElementById('clear');
+        const checkoutButton = document.getElementById('checkout');
+        const tableContainer = document.querySelector('.table-responsive');
+        const bottomSection = document.querySelector('.d-flex.justify-content-between');
+
+        // --- Función Principal para Cargar el Carrito ---
+        const loadCart = async () => {
+            try {
+                const response = await fetch(`${API_URL}/carrito/ver_carrito/`, {
+                    credentials: 'include'
+                });
+                if (!response.ok) throw new Error('No se pudo cargar el carrito');
+                
+                const cart = await response.json();
+                
+                // Limpiamos el carrito
+                cartTableBody.innerHTML = '';
+
+                if (cart.items.length === 0) {
+                    // Carrito vacío
+                    emptyMessage.classList.remove('d-none');
+                    tableContainer.classList.add('d-none');
+                    bottomSection.classList.add('d-none');
+                    return;
+                }
+
+                // Carrito con items
+                emptyMessage.classList.add('d-none');
+                tableContainer.classList.remove('d-none');
+                bottomSection.classList.remove('d-none');
+
+                let granTotal = 0;
+
+                cart.items.forEach(item => {
+                    const producto = item.producto;
+                    const subtotal = producto.precio * item.cantidad;
+                    granTotal += subtotal;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <img src="${producto.imagen || 'https://placehold.co/600x400?text=Al+Sahara'}" alt="${producto.nombre}" class="img-fluid rounded" style="width: 50px; height: 50px; object-fit: cover;">
+                        </td>
+                        <td>${producto.nombre}</td>
+                        <td class="text-end">$${parseFloat(producto.precio).toFixed(0)}</td>
+                        <td class="text-center">
+                            <div class="input-group input-group-sm" style="width: 120px; margin: auto;">
+                                <button class="btn btn-outline-secondary" type="button" onclick="updateItemQuantity(${item.id}, ${item.cantidad - 1})">-</button>
+                                <input type="text" class="form-control text-center" value="${item.cantidad}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="updateItemQuantity(${item.id}, ${item.cantidad + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="text-end">$${subtotal.toFixed(0)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${item.id})">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    cartTableBody.appendChild(tr);
+                });
+
+                // Actualizar total
+                totalElement.textContent = `$${granTotal.toFixed(0)}`;
+
+            } catch (error) {
+                console.error(error);
+                // Si falla (ej: API caída), mostramos carrito vacío
+                emptyMessage.classList.remove('d-none');
+                tableContainer.classList.add('d-none');
+                bottomSection.classList.add('d-none');
+            }
+        };
+
+        // --- Funciones de Acción del Carrito ---
+
+        // Actualizar Cantidad (+/-)
+        const updateItemQuantity = async (itemId, newQuantity) => {
+            if (newQuantity <= 0) {
+                // Si la cantidad llega a 0, lo eliminamos
+                await deleteItem(itemId);
+                return;
+            }
+            
+            try {
+                await fetch(`${API_URL}/carrito/${itemId}/actualizar_item/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ cantidad: newQuantity })
+                });
+                loadCart(); // Recargamos el carrito
+            } catch (error) {
+                console.error('Error al actualizar item:', error);
+            }
+        };
+
+        // Eliminar un Item
+        const deleteItem = async (itemId) => {
+            if (!confirm('¿Seguro que quieres eliminar este producto?')) return;
+            
+            try {
+                await fetch(`${API_URL}/carrito/${itemId}/eliminar_item/`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                loadCart(); // Recargamos el carrito
+            } catch (error) {
+                console.error('Error al eliminar item:', error);
+            }
+        };
+
+        // Vaciar todo el Carrito
+        const clearCart = async () => {
+            if (!confirm('¿Seguro que quieres vaciar todo el carrito?')) return;
+            
+            try {
+                await fetch(`${API_URL}/carrito/limpiar_carrito/`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                loadCart(); // Recargamos el carrito
+            } catch (error) {
+                console.error('Error al vaciar carrito:', error);
+            }
+        };
+
+        // --- SCRIPT DE ARRANQUE (EL GUARDIÁN) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            
+            // 1. Verificar autenticación
+            try {
+                const response = await fetch(`${API_URL}/auth/me/`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    usuarioLogueado = await response.json();
+                    
+                    // 2. Cargar el Carrito
+                    loadCart();
+
+                    // 3. Conectar Botones
+                    clearButton.addEventListener('click', clearCart);
+                    checkoutButton.addEventListener('click', () => {
+                        window.location.href = 'checkout.html';
+                    });
+
+                } else {
+                    // Si no está logueado, lo echamos
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                // Si la API está caída
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</body>
 </html>

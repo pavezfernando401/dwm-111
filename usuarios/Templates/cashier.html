@@ -58,23 +58,229 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-function getAuth(){ try { return JSON.parse(localStorage.getItem("auth")); } catch { return null; } }
-async function toggleActivo(id, activo){
-  const u = getAuth();
-  if(!u?.token){ alert("Debes iniciar sesión"); return; }
-  const res = await fetch(`http://localhost:3001/api/productos/${id}/activo`,{
-    method:"PATCH",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization": "Bearer " + u.token
-    },
-    body: JSON.stringify({ activo }) // 1 o 0
-  });
-  if(!res.ok){ alert("Sin permiso o error"); return; }
-  // refresca lista
-  cargarProductosCajero();
-}
-</script>
+        const API_URL = 'http://127.0.0.1:8000/api';
+        let usuarioLogueado = null;
+        let cachedOrders = [];
+        let activeFilter = 'all';
 
+        const ordersContainer = document.getElementById('cashierOrders');
+        const filterButtons = document.querySelectorAll('.list-group-item');
+
+        // --- Funciones de Ayuda (Logout, Navbar) ---
+        const handleLogout = async () => {
+            try {
+                await fetch(`${API_URL}/auth/logout/`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) { console.error('Error en logout:', error); }
+            window.location.href = 'index.html';
+        };
+
+        const setupNavbar = (user) => {
+            const navMenu = document.getElementById('navMenu');
+            if (!navMenu) return;
+            const welcomeName = user.first_name || user.email;
+            let menuHtml = `
+                <li class="nav-item"><a class="nav-link" href="catalog-staff.html">Menú Staff</a></li>
+                <li class="nav-item"><a class="nav-link active" aria-current="page" href="cashier.html">Caja</a></li>
+                <li class="nav-item"><a class="nav-link" href="dispatch.html">Despachos</a></li>
+                <li class="nav-item"><a class="nav-link" href="admin-register.html">Registrar</a></li>
+            `;
+            if (user.role === 'admin') {
+                menuHtml += `<li class="nav-item"><a class="nav-link" href="reports.html">Reportes</a></li>`;
+            }
+            menuHtml += `
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        Hola, ${welcomeName} (${user.role})
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" href="profile.html">Mi Perfil</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" id="logoutButton">Cerrar Sesión</a></li>
+                    </ul>
+                </li>
+            `;
+            navMenu.innerHTML = menuHtml;
+            document.getElementById('logoutButton').addEventListener('click', handleLogout);
+        };
+
+        // --- Lógica de la Caja ---
+
+        // 3. RENDERIZA los pedidos en el HTML
+        const renderOrders = (filter) => {
+            ordersContainer.innerHTML = '';
+            
+            const filteredOrders = cachedOrders.filter(pedido => {
+                if (filter === 'all') return true;
+                if (filter === 'card') return pedido.metodo_pago === 'TARJETA';
+                if (filter === 'transfer') return pedido.metodo_pago === 'TRANSFERENCIA';
+                if (filter === 'cash') return pedido.metodo_pago === 'EFECTIVO';
+                if (filter === 'pending') return pedido.estado === 'PENDIENTE';
+                return true;
+            });
+
+            if (filteredOrders.length === 0) {
+                ordersContainer.innerHTML = '<div class="alert alert-info">No hay pedidos que coincidan con este filtro.</div>';
+                return;
+            }
+
+            filteredOrders.forEach(pedido => {
+                let itemsHtml = '';
+                pedido.items.forEach(item => {
+                    itemsHtml += `
+                        <li class="list-group-item">
+                            <strong>${item.cantidad}x</strong> ${item.nombre_producto}
+                        </li>
+                    `;
+                });
+                
+                let actionButtonHtml = '';
+                if (pedido.estado === 'PENDIENTE') {
+                    actionButtonHtml = `
+                        <button class="btn btn-success" onclick="approveOrder(this, ${pedido.id})">
+                            <i class="fas fa-check"></i> Aprobar Pago
+                        </button>
+                    `;
+                } else if (pedido.estado === 'EN PREPARACION') {
+                    actionButtonHtml = `
+                        <button class="btn btn-primary" onclick="moveToDispatch(this, ${pedido.id})">
+                            <i class="fas fa-truck"></i> Mover a Despacho
+                        </button>
+                    `;
+                }
+
+                ordersContainer.innerHTML += `
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between">
+                            <strong>Pedido #${pedido.id} - ${pedido.usuario.first_name || pedido.usuario.email}</strong>
+                            <span>Total: $${parseFloat(pedido.total).toFixed(0)}</span>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group mb-3">${itemsHtml}</ul>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge ${pedido.estado === 'PENDIENTE' ? 'bg-warning text-dark' : 'bg-info'}">${pedido.estado}</span>
+                                    <span class="text-muted ms-2">Método: ${pedido.metodo_pago}</span>
+                                </div>
+                                <div>
+                                    ${actionButtonHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        };
+        
+        // --- FUNCIONES DE ACCIÓN ACTUALIZADAS ---
+        
+        // CAMBIO: Acepta 'buttonElement' y ya no usa 'confirm()'
+        const approveOrder = async (buttonElement, pedidoId) => {
+            await updateOrderStatus(buttonElement, pedidoId, 'EN PREPARACION');
+        };
+        
+        // CAMBIO: Acepta 'buttonElement' y ya no usa 'confirm()'
+        const moveToDispatch = async (buttonElement, pedidoId) => {
+            await updateOrderStatus(buttonElement, pedidoId, 'EN CAMINO');
+        };
+        
+        // CAMBIO: FUNCIÓN updateOrderStatus REEMPLAZADA (LA LÓGICA 'NO-ALERT')
+        const updateOrderStatus = async (buttonElement, pedidoId, newStatus) => {
+            // 1. Guardar estado original y deshabilitar botón
+            const originalHtml = buttonElement.innerHTML;
+            const originalClasses = buttonElement.className;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                // 2. Llamar a la API
+                const response = await fetch(`${API_URL}/pedidos/${pedidoId}/update_status/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ estado: newStatus })
+                });
+                if (!response.ok) throw new Error('El estado no se pudo actualizar');
+                
+                // 3. Éxito: Recargamos la lista
+                loadActiveOrders(); 
+
+            } catch (error) {
+                // 4. Error: Reemplazamos el alert()
+                console.error(error);
+                buttonElement.innerHTML = 'Error';
+                buttonElement.className = 'btn btn-danger'; // Cambia a color rojo
+
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalHtml;
+                    buttonElement.className = originalClasses;
+                    buttonElement.disabled = false;
+                }, 2000);
+            }
+        };
+        
+        // 2. LLAMA a la API y guarda los pedidos
+        const loadActiveOrders = async () => {
+            try {
+                const response = await fetch(`${API_URL}/pedidos/active_orders/`, {
+                    credentials: 'include'
+                });
+                if (!response.ok) throw new Error('No se pudo cargar los pedidos');
+                
+                cachedOrders = await response.json();
+                renderOrders(activeFilter);
+
+            } catch (error) {
+                console.error(error);
+                ordersContainer.innerHTML = '<div class="alert alert-danger">Error al cargar los pedidos.</div>';
+            }
+        };
+
+        // 1. MANEJA el clic en los botones de filtro
+        function filterCashier(filterKey) {
+            activeFilter = filterKey;
+            
+            filterButtons.forEach(button => {
+                const buttonKey = button.getAttribute('onclick').split("'")[1];
+                if (buttonKey === filterKey) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+            
+            renderOrders(activeFilter);
+        }
+
+        // --- SCRIPT DE ARRANQUE (EL GUARDIÁN) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`${API_URL}/auth/me/`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    usuarioLogueado = await response.json();
+                    
+                    if (usuarioLogueado.role === 'staff' || usuarioLogueado.role === 'admin') {
+                        setupNavbar(usuarioLogueado);
+                        
+                        filterButtons[0].classList.add('active');
+                        activeFilter = filterButtons[0].getAttribute('onclick').split("'")[1];
+
+                        loadActiveOrders();
+                    } else {
+                        window.location.href = 'catalog-client.html';
+                    }
+                } else {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
 </body>
 </html>

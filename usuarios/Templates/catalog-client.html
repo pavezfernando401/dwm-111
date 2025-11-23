@@ -12,13 +12,31 @@
 </head>
 <body>
   <!-- NAVBAR -->
-  <nav class="navbar navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
-      <div id="navActions" class="d-flex flex-wrap gap-2"></div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-utensils"></i> Al Sahara
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto" id="navMenu">
+                    </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+    <div id="cartToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+        <i class="fas fa-shopping-cart me-2"></i>
+        <strong class="me-auto">Carrito Actualizado</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastBody">
+        </div>
     </div>
-  </nav>
-
+    </div>
   <main class="container py-4">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
       <h1 class="h3 mb-0"><i class="fa-regular fa-bookmark me-2"></i>Nuestro Menú (Cliente)</h1>
@@ -75,178 +93,192 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = 'http://127.0.0.1:8000/api';
+        let usuarioLogueado = null;
+        let toastBS = null; // Variable para el Toast
 
-  <script>
-  (() => {
-    const API = "http://127.0.0.1:8000";
-    const qs = (s, p=document) => p.querySelector(s);
-    const qsa = (s, p=document) => [...p.querySelectorAll(s)];
+        // --- Funciones de Ayuda (Logout, Navbar) ---
+        const handleLogout = async () => {
+            try {   
+                await fetch(`${API_URL}/auth/logout/`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Error en logout:', error);
+            }
+            window.location.href = 'index.html';
+        };
 
-    // refs UI
-    const grid = qs("#productsGrid");
-    const featuredSection = qs("#featuredSection");
-    const featuredWrap = qs("#featuredProducts");
-    const searchInput = qs("#searchInput");
-    const filterBtns = qsa(".filter-btn");
-    const pageInfo = qs("#pageInfo");
-    const prevBtn = qs("#prevPage");
-    const nextBtn = qs("#nextPage");
-    const navActions = qs("#navActions");
+        const setupNavbar = (user) => {
+            const navMenu = document.getElementById('navMenu');
+            if (!navMenu) return;
+            const welcomeName = user.first_name || user.email;
+            navMenu.innerHTML = `
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="catalog-client.html">Ver Menú</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="orders.html">Mis Pedidos</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="cart.html">Carrito</a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        Hola, ${welcomeName}
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" href="profile.html">Mi Perfil</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" id="logoutButton">Cerrar Sesión</a></li>
+                    </ul>
+                </li>
+            `;
+            document.getElementById('logoutButton').addEventListener('click', handleLogout);
+        };
 
-    // modal
-    const modalEl = qs("#productModal");
-    const modal = new bootstrap.Modal(modalEl);
-    const modalName = qs("#modalProductName");
-    const modalPrice = qs("#modalProductPrice");
-    const modalImage = qs("#modalProductImage");
-    const modalIngr = qs("#modalProductIngredients");
-    const modalStock = qs("#modalProductStock");
-    const modalAdd = qs("#modalAddToCart");
+        // --- ¡NUEVA! Función para mostrar Notificaciones ---
+        const showToast = (message) => {
+            const toastBody = document.getElementById('toastBody');
+            toastBody.textContent = message;
+            toastBS.show(); // Muestra el toast
+        };
 
-    let sessionUser = null;
-    let state = { q: "", category: "all", page: 1, pages: 1, onlyAvailable: 1 };
+        // --- Función Principal de Carga de Productos ---
+        const loadProducts = async (category = 'all') => {
+            const productsGrid = document.getElementById('productsGrid');
+            productsGrid.innerHTML = '<p>Cargando productos...</p>';
+            
+            let apiUrl = `${API_URL}/productos/?onlyAvailable=1`;
+            if (category !== 'all') {
+                apiUrl += `&category=${category}`;
+            }
+            
+            try {
+                const response = await fetch(apiUrl, { credentials: 'include' });
+                const productos = await response.json();
+                productsGrid.innerHTML = '';
+                
+                if (productos.length === 0) {
+                    productsGrid.innerHTML = '<p>No hay productos en esta categoría.</p>';
+                    return;
+                }
 
-    async function whoami(){
-      try {
-        const r = await fetch(API + "/api/auth/me", { credentials: "include" });
-        const { user } = await r.json();
-        sessionUser = user ?? null;
+                productos.forEach(producto => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-4 col-lg-3 mb-4';
+                    const placeholderImg = 'https://placehold.co/600x400?text=Al+Sahara';
+                    const imagenSrc = producto.imagen || placeholderImg;
+                    
+                    // CAMBIO: Quitando los .00
+                    const precioFormateado = parseFloat(producto.precio).toFixed(0);
 
-        // Staff no debe estar aquí
-        if (sessionUser && (sessionUser.role === "admin" || sessionUser.role === "cajero")) {
-          location.replace("catalog-staff.html");
-          throw new Error("redirecting");
-        }
+                    col.innerHTML = `
+                        <div class="card h-100">
+                            <img src="${imagenSrc}" class="card-img-top" alt="${producto.nombre}" style="height: 200px; object-fit: cover;">
+                            <div class="card-body d-flex flex-column">
+                                <div id="alert-placeholder" class="mb-3"></div>
+                                <form id="adminRegisterForm">
+                                <h5 class="card-title">${producto.nombre}</h5>
+                                <p class="card-text text-primary fs-5 fw-bold">$${precioFormateado}</p>
+                                <button class="btn btn-outline-primary mt-auto" onclick="addToCart(this, ${producto.id}, '${producto.nombre}')">
+                                    <i class="fa fa-cart-plus"></i> Añadir al carrito
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    productsGrid.appendChild(col);
+                });
+            } catch (error) {
+                console.error('Error cargando productos:', error);
+                productsGrid.innerHTML = '<p>Error al cargar productos.</p>';
+            }
+        };
 
-        // Render navbar (cliente o invitado) REVISAR BOTON PARA IR AL INDEX
-        navActions.innerHTML = sessionUser ? (`
-          <a class="navbar-brand" href="index.html"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
-          <a class="btn btn-outline-light btn-sm" href="catalog-client.html">Menú</a>
-          <a class="btn btn-outline-light btn-sm" href="orders.html">Mis órdenes</a>
-          <a class="btn btn-outline-light btn-sm" href="cart.html">Carrito</a>
-          <a class="btn btn-outline-light btn-sm" href="profile.html">Mi perfil</a>
-          <button class="btn btn-warning btn-sm" id="btnLogout">Cerrar sesión</button>
-        `) : (`
-          <a class="btn btn-warning btn-sm" href="login.html?redirect=catalog-client.html">Iniciar sesión</a>
-        `);
+        // --- ¡ACTUALIZADA! Función para Añadir al Carrito (Sin Alertas) ---
+        const addToCart = async (buttonElement, productoId, productoNombre) => {
+            // 1. Deshabilitar botón y mostrar spinner
+            const originalHtml = buttonElement.innerHTML;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-        qs("#btnLogout")?.addEventListener("click", async () => {
-          await fetch(API + "/api/auth/logout", { method: "POST", credentials: "include" });
-          location.href = "login.html";
+            try {
+                // 2. Llamar a la API
+                const response = await fetch(`${API_URL}/carrito/agregar_item/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        producto_id: productoId,
+                        cantidad: 1
+                    })
+                });
+                
+                if (response.ok) {
+                    // 3. Éxito: Mostrar Toast y revertir botón
+                    showToast(`'${productoNombre}' fue agregado al carrito.`);
+                    setTimeout(() => {
+                        buttonElement.innerHTML = originalHtml;
+                        buttonElement.disabled = false;
+                    }, 1000); // Revierte después de 1 segundo
+                } else {
+                    // 4. Error de API: Mostrar Toast de error
+                    showToast('Error al agregar producto.');
+                    buttonElement.innerHTML = originalHtml;
+                    buttonElement.disabled = false;
+                }
+            } catch (error) { 
+                // 5. Error de Red: Mostrar Toast de error
+                console.error('Error de red:', error);
+                showToast('Error de conexión.');
+                buttonElement.innerHTML = originalHtml;
+                buttonElement.disabled = false;
+            }
+        };
+
+        // --- SCRIPT DE ARRANQUE (EL GUARDIÁN) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            
+            // --- ¡NUEVO! Inicializar el Toast ---
+            const toastEl = document.getElementById('cartToast');
+            if (toastEl) {
+                toastBS = new bootstrap.Toast(toastEl);
+            }
+            // --- Fin de la inicialización ---
+
+            try {
+                const response = await fetch(`${API_URL}/auth/me/`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    usuarioLogueado = await response.json();
+                    if (usuarioLogueado.role === 'staff' || usuarioLogueado.role === 'admin') {
+                        window.location.href = 'catalog-staff.html';
+                    } else {
+                        setupNavbar(usuarioLogueado);
+                        loadProducts('all');
+                        
+                        const filterButtons = document.querySelectorAll('.filter-btn');
+                        filterButtons.forEach(button => {
+                            button.addEventListener('click', () => {
+                                filterButtons.forEach(btn => btn.classList.remove('active'));
+                                button.classList.add('active');
+                                const category = button.dataset.category;
+                                loadProducts(category);
+                            });
+                        });
+                    }
+                } else {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
         });
-      } catch { sessionUser = null; }
-    }
-
-    function renderCard(p){
-      const tags = (p.tags ?? []).map(t => `<span class="badge text-bg-secondary me-1">${t}</span>`).join("");
-      const badge = p.featured ? `<span class="badge text-bg-warning ms-2"><i class="fa fa-star"></i> Destacado</span>` : "";
-      const stock = p.available ? `<span class="badge text-bg-success">Disponible</span>` : `<span class="badge text-bg-danger">Agotado</span>`;
-      return `
-        <div class="col-md-4 col-lg-3 mb-4">
-          <div class="card h-100 shadow-sm">
-            <img src="${p.imagen}" class="card-img-top" alt="${p.nombre}" style="height:180px; object-fit:cover">
-            <div class="card-body d-flex flex-column">
-              <h5 class="card-title mb-1">${p.nombre} ${badge}</h5>
-              <div class="mb-2 small">${tags}</div>
-              <div class="mb-2">${stock}</div>
-              <p class="card-text text-primary fw-bold mb-3">$${p.price}</p>
-              <div class="mt-auto d-grid gap-2">
-                <button class="btn btn-outline-primary" data-action="ver" data-id="${p.id}">
-                  <i class="fa fa-eye"></i> Ver detalle
-                </button>
-                <button class="btn btn-primary" data-action="add" data-id="${p.id}" ${p.available ? "" : "disabled"}>
-                  <i class="fa fa-cart-plus"></i> Añadir al carrito
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    async function fetchProducts(){
-      const params = new URLSearchParams();
-      if (state.q) params.set("q", state.q);
-      if (state.category && state.category !== "all") params.set("category", state.category);
-      params.set("onlyAvailable", "1"); // cliente ve solo disponibles
-      params.set("page", state.page);
-      params.set("limit", 12);
-      const url = API + "/api/productos?" + params.toString();
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("No se pudo cargar productos");
-      return res.json();
-    }
-
-    async function load(){
-      await whoami();
-      const { items, page, pages } = await fetchProducts();
-
-      const featured = items.filter(i => i.featured && i.available);
-      if (featured.length) {
-        featuredSection.style.display = "";
-        featuredWrap.innerHTML = featured.map(renderCard).join("");
-      } else {
-        featuredSection.style.display = "none";
-        featuredWrap.innerHTML = "";
-      }
-
-      grid.innerHTML = items.map(renderCard).join("");
-
-      state.pages = pages;
-      pageInfo.textContent = `Página ${page} de ${pages}`;
-      prevBtn.disabled = page <= 1;
-      nextBtn.disabled = page >= pages;
-    }
-
-    // Handlers
-    searchInput?.addEventListener("input", (e) => { state.q = e.target.value.trim(); state.page = 1; load().catch(console.error); });
-    filterBtns.forEach(btn => btn.addEventListener("click", () => {
-      filterBtns.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      state.category = btn.dataset.category || "all";
-      state.page = 1;
-      load().catch(console.error);
-    }));
-    prevBtn.addEventListener("click", () => { if (state.page>1){ state.page--; load().catch(console.error);} });
-    nextBtn.addEventListener("click", () => { if (state.page<state.pages){ state.page++; load().catch(console.error);} });
-
-    document.addEventListener("click", async (ev) => {
-      const btn = ev.target.closest("button[data-action]");
-      if (!btn) return;
-      const id = Number(btn.dataset.id);
-      const action = btn.dataset.action;
-
-      if (action === "ver") {
-        const r = await fetch(`${API}/api/productos/${id}`, { credentials: "include" });
-        const p = await r.json();
-        modalName.textContent = p.nombre;
-        modalPrice.textContent = `$${p.price}`;
-        modalImage.innerHTML = `<img src="${p.imagen}" class="img-fluid rounded">`;
-        modalIngr.innerHTML = (p.ingredients || []).map(i => `<li>${i}</li>`).join("");
-        modalStock.className = "alert " + (p.available ? "alert-success" : "alert-danger");
-        modalStock.textContent = p.available ? "Disponible" : "Agotado";
-        modalAdd.disabled = !p.available;
-        modalAdd.onclick = () => addToCart(id).catch(console.error);
-        modal.show();
-      }
-
-      if (action === "add") {
-        await addToCart(id);
-      }
-    });
-
-    async function addToCart(producto_id){
-      const res = await fetch(`${API}/api/carrito/items`, {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        credentials: "include",
-        body: JSON.stringify({ producto_id, cantidad: 1 })
-      });
-      if (!res.ok) { alert("Inicia sesión o intenta más tarde."); return; }
-      alert("Producto añadido al carrito");
-    }
-
-    document.addEventListener("DOMContentLoaded", () => load().catch(console.error));
-  })();
-  </script>
+    </script>
 </body>
 </html>

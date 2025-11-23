@@ -18,7 +18,7 @@ class UserSerializer(serializers.ModelSerializer):
         if obj.is_superuser:
             return 'admin'
         if obj.is_staff:
-            return 'cajero' # Asume que staff = cajero
+            return 'staff'
         return 'cliente'
 
 # Serializer para Categoría
@@ -44,7 +44,7 @@ class ItemPedidoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ItemPedido
-        fields = ['producto', 'cantidad', 'precio_en_pedido']
+        fields = ['producto', 'cantidad', 'precio_en_pedido','nombre_producto']
 
 # Serializer para ver un Pedido (con todos sus items)
 class PedidoSerializer(serializers.ModelSerializer):

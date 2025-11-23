@@ -12,12 +12,19 @@
 </head>
 <body>
   <!-- NAVBAR -->
-  <nav class="navbar navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#"><i class="fa-solid fa-utensils"></i> Al Sahara</a>
-      <div id="navActions" class="d-flex flex-wrap gap-2"></div>
-    </div>
-  </nav>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-utensils"></i> Al Sahara
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto" id="navMenu"></ul>
+            </div>
+        </div>
+    </nav>
 
   <main class="container py-4">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -67,170 +74,243 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = 'http://127.0.0.1:8000/api';
+        let usuarioLogueado = null;
+        let productModalBS = null; // Instancia del Modal de Bootstrap
+        let productosCacheados = {}; // Para guardar los productos
 
-  <script>
-  (() => {
-    const API = "http://127.0.0.1:8000";
-    const qs = (s, p=document) => p.querySelector(s);
-    const qsa = (s, p=document) => [...p.querySelectorAll(s)];
-
-    const grid = qs("#productsGrid");
-    const searchInput = qs("#searchInput");
-    const filterBtns = qsa(".filter-btn");
-    const pageInfo = qs("#pageInfo");
-    const prevBtn = qs("#prevPage");
-    const nextBtn = qs("#nextPage");
-    const navActions = qs("#navActions");
-
-    const modalEl = qs("#productModal");
-    const modal = new bootstrap.Modal(modalEl);
-    const modalName = qs("#modalProductName");
-    const modalPrice = qs("#modalProductPrice");
-    const modalImage = qs("#modalProductImage");
-    const modalIngr = qs("#modalProductIngredients");
-    const modalStock = qs("#modalProductStock");
-    const modalToggle = qs("#modalToggle");
-
-    let sessionUser = null;
-    let state = { q: "", category: "all", page: 1, pages: 1 };
-
-    async function whoami(){
-      const r = await fetch(API + "/api/auth/me", { credentials: "include" });
-      const { user } = await r.json();
-      sessionUser = user ?? null;
-
-      // Guard: solo staff
-      if (!sessionUser) return location.replace("login.html?redirect=catalog-staff.html");
-      if (!(sessionUser.role === "admin" || sessionUser.role === "cajero")) {
-        return location.replace("catalog-client.html");
-      }
-
-      // Navbar para staff (si es admin, incluye Reportes) REVISAR BOTON PARA IR AL INDEX
-      navActions.innerHTML = `
-        <a class="navbar-brand" href="index.html"><i class="fa-solid fa-utensils"></i> Al Sahara</a>  
-        <a class="btn btn-outline-light btn-sm" href="catalog-staff.html">Menú</a>
-        <a class="btn btn-outline-light btn-sm" href="cashier.html">Manejar pedidos</a>
-        <a class="btn btn-outline-light btn-sm" href="dispatch.html">Manejar despachos</a>
-        <a class="btn btn-outline-light btn-sm" href="admin-register.html">Registrar cliente</a>
-        ${sessionUser.role === 'admin' ? '<a class="btn btn-outline-light btn-sm" href="reports.html">Reportes</a>' : ''}
-        <button class="btn btn-warning btn-sm" id="btnLogout">Cerrar sesión</button>
-      `;
-      qs("#btnLogout")?.addEventListener("click", async () => {
-        await fetch(API + "/api/auth/logout", { method: "POST", credentials: "include" });
-        location.href = "login.html";
-      });
-    }
-
-    function renderCard(p){
-      const tags = (p.tags ?? []).map(t => `<span class="badge text-bg-secondary me-1">${t}</span>`).join("");
-      const badge = p.featured ? `<span class="badge text-bg-warning ms-2"><i class="fa fa-star"></i> Destacado</span>` : "";
-      const stock = p.available ? `<span class="badge text-bg-success">Disponible</span>` : `<span class="badge text-bg-danger">Agotado</span>`;
-      return `
-        <div class="col-md-4 col-lg-3 mb-4">
-          <div class="card h-100 shadow-sm">
-            <img src="${p.imagen}" class="card-img-top" alt="${p.nombre}" style="height:180px; object-fit:cover">
-            <div class="card-body d-flex flex-column">
-              <h5 class="card-title mb-1">${p.nombre} ${badge}</h5>
-              <div class="mb-2 small">${tags}</div>
-              <div class="mb-2">${stock}</div>
-              <p class="card-text text-primary fw-bold mb-3">$${p.price}</p>
-              <div class="mt-auto d-grid gap-2">
-                <button class="btn btn-outline-primary" data-action="ver" data-id="${p.id}">
-                  <i class="fa fa-eye"></i> Ver detalle
-                </button>
-                <button class="btn ${p.available ? "btn-outline-danger" : "btn-outline-success"}" data-action="toggle" data-id="${p.id}" data-available="${p.available?1:0}">
-                  ${p.available ? '<i class="fa fa-ban"></i> Marcar Agotado' : '<i class="fa fa-check"></i> Marcar Disponible'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    async function fetchProducts(){
-      const params = new URLSearchParams();
-      if (state.q) params.set("q", state.q);
-      if (state.category && state.category !== "all") params.set("category", state.category);
-      params.set("page", state.page);
-      params.set("limit", 12);
-      const url = API + "/api/productos?" + params.toString();
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("No se pudo cargar productos");
-      return res.json();
-    }
-
-    async function load(){
-      await whoami();
-      const { items, page, pages } = await fetchProducts();
-      grid.innerHTML = items.map(renderCard).join("");
-      state.pages = pages;
-      pageInfo.textContent = `Página ${page} de ${pages}`;
-      prevBtn.disabled = page <= 1;
-      nextBtn.disabled = page >= pages;
-    }
-
-    // Handlers
-    searchInput?.addEventListener("input", (e) => { state.q = e.target.value.trim(); state.page = 1; load().catch(console.error); });
-    filterBtns.forEach(btn => btn.addEventListener("click", () => {
-      filterBtns.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      state.category = btn.dataset.category || "all";
-      state.page = 1;
-      load().catch(console.error);
-    }));
-    prevBtn.addEventListener("click", () => { if (state.page>1){ state.page--; load().catch(console.error);} });
-    nextBtn.addEventListener("click", () => { if (state.page<state.pages){ state.page++; load().catch(console.error);} });
-
-    document.addEventListener("click", async (ev) => {
-      const btn = ev.target.closest("button[data-action]");
-      if (!btn) return;
-      const id = Number(btn.dataset.id);
-      const action = btn.dataset.action;
-
-      if (action === "ver") {
-        const r = await fetch(`${API}/api/productos/${id}`, { credentials: "include" });
-        const p = await r.json();
-        modalName.textContent = p.nombre;
-        modalPrice.textContent = `$${p.price}`;
-        modalImage.innerHTML = `<img src="${p.imagen}" class="img-fluid rounded">`;
-        modalIngr.innerHTML = (p.ingredients || []).map(i => `<li>${i}</li>`).join("");
-        modalStock.className = "alert " + (p.available ? "alert-success" : "alert-danger");
-        modalStock.textContent = p.available ? "Disponible" : "Agotado";
-
-        modalToggle.className = "btn " + (p.available ? "btn-outline-danger" : "btn-outline-success");
-        modalToggle.innerHTML = p.available ? '<i class="fa fa-ban"></i> Marcar Agotado' : '<i class="fa fa-check"></i> Marcar Disponible';
-        modalToggle.onclick = async () => {
-          await toggleAvailability(id, p.available ? 0 : 1);
-          modal.hide();
-          load().catch(console.error);
+        // --- Funciones de Ayuda (Logout, Navbar) ---
+        const handleLogout = async () => {
+            try {
+                await fetch(`${API_URL}/auth/logout/`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Error en logout:', error);
+            }
+            window.location.href = 'index.html';
         };
 
-        modal.show();
-      }
+        // --- ¡FUNCIÓN NAVBAR ACTUALIZADA CON LÓGICA DE ROLES! ---
+        const setupNavbar = (user) => {
+            const navMenu = document.getElementById('navMenu');
+            if (!navMenu) return;
 
-      if (action === "toggle") {
-        const current = btn.getAttribute("data-available") === "1";
-        await toggleAvailability(id, current ? 0 : 1);
-        load().catch(console.error);
-      }
-    });
+            const welcomeName = user.first_name || user.email;
+            let menuHtml = ''; // Vamos a construir el HTML del menú
 
-    async function toggleAvailability(id, available){
-      const res = await fetch(`${API}/api/productos/${id}/available`, {
-        method: "PATCH",
-        headers: { "Content-Type":"application/json" },
-        credentials: "include",
-        body: JSON.stringify({ available })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(()=>({}));
-        alert(err?.error || "Error al cambiar disponibilidad");
-      }
-    }
+            // --- Links para TODOS los staff (Cajero y Admin) ---
+            menuHtml += `
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="catalog-staff.html">Menú Staff</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="cashier.html">Caja</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="dispatch.html">Despachos</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="admin-register.html">Registrar</a>
+                </li>
+            `;
 
-    document.addEventListener("DOMContentLoaded", () => load().catch(console.error));
-  })();
-  </script>
+            // --- Links SOLO para ADMIN ---
+            if (user.role === 'admin') {
+                menuHtml += `
+                    <li class="nav-item">
+                        <a class="nav-link" href="reports.html">Reportes</a>
+                    </li>
+                `;
+            }
+
+            // --- Menú de Usuario (para todos) ---
+            // Muestro el rol para que sea fácil de ver
+            menuHtml += `
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        Hola, ${welcomeName} (${user.role})
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" href="profile.html">Mi Perfil</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" id="logoutButton">Cerrar Sesión</a></li>
+                    </ul>
+                </li>
+            `;
+
+            // Insertar todo en el HTML
+            navMenu.innerHTML = menuHtml;
+
+            // Asignar el evento de logout
+            document.getElementById('logoutButton').addEventListener('click', handleLogout);
+        };
+
+        // --- Función Principal de Carga de Productos (Staff) ---
+        const loadProducts = async (category = 'all') => {
+            const productsGrid = document.getElementById('productsGrid');
+            productsGrid.innerHTML = '<p>Cargando productos...</p>';
+            productosCacheados = {};
+            
+            let apiUrl = `${API_URL}/productos/`;
+            if (category !== 'all') {
+                apiUrl += `?category=${category}`;
+            }
+
+            try {
+                const response = await fetch(apiUrl, { credentials: 'include' });
+                const productos = await response.json();
+                productsGrid.innerHTML = '';
+                
+                if (productos.length === 0) {
+                    productsGrid.innerHTML = '<p>No hay productos en esta categoría.</p>';
+                    return;
+                }
+
+                productos.forEach(producto => {
+                    productosCacheados[producto.id] = producto;
+                    const col = document.createElement('div');
+                    col.className = 'col-md-4 col-lg-3 mb-4';
+                    const cardClass = producto.disponible ? '' : 'bg-light opacity-50';
+                    const placeholderImg = 'https://placehold.co/600x400?text=Al+Sahara';
+                    const imagenSrc = producto.imagen || placeholderImg;
+
+                    col.innerHTML = `
+                        <div class="card h-100 ${cardClass}">
+                            <img src="${imagenSrc}" class="card-img-top" alt="${producto.nombre}" style="height: 200px; object-fit: cover;">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title">${producto.nombre}</h5>
+                                <p class="card-text text-primary fs-5 fw-bold">$${producto.precio}</p>
+                                <p class="card-text small">
+                                    ${producto.disponible 
+                                        ? '<span class="badge bg-success">Disponible</span>' 
+                                        : '<span class="badge bg-danger">Agotado</span>'
+                                    }
+                                </p>
+                                <button class="btn btn-outline-secondary mt-auto" onclick="openProductModal(${producto.id})">
+                                    <i class="fa fa-edit"></i> Gestionar
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    productsGrid.appendChild(col);
+                });
+            } catch (error) {
+                console.error('Error cargando productos:', error);
+                productsGrid.innerHTML = '<p>Error al cargar productos.</p>';
+            }
+        };
+
+        // --- Funciones del Modal (Staff) ---
+        const openProductModal = (productoId) => {
+            const producto = productosCacheados[productoId];
+            if (!producto) return;
+            document.getElementById('modalProductName').textContent = producto.nombre;
+            document.getElementById('modalProductPrice').textContent = `$${producto.precio}`;
+            const stockAlert = document.getElementById('modalProductStock');
+            const toggleButton = document.getElementById('modalToggle');
+            if (producto.disponible) {
+                stockAlert.className = 'alert alert-success p-2';
+                stockAlert.textContent = 'Este producto está DISPONIBLE';
+                toggleButton.className = 'btn btn-danger';
+                toggleButton.textContent = 'Marcar como AGOTADO';
+                toggleButton.onclick = () => toggleAvailability(producto.id, false);
+            } else {
+                stockAlert.className = 'alert alert-danger p-2';
+                stockAlert.textContent = 'Este producto está AGOTADO';
+                toggleButton.className = 'btn btn-success';
+                toggleButton.textContent = 'Marcar como DISPONIBLE';
+                toggleButton.onclick = () => toggleAvailability(producto.id, true);
+            }
+            productModalBS.show();
+        };
+
+        const toggleAvailability = async (productoId, newAvailability) => {
+    
+            // 1. Encontrar el botón del modal
+            const buttonElement = document.getElementById('modalToggle');
+            const originalHtml = buttonElement.innerHTML;
+            const originalClasses = buttonElement.className;
+            
+            // 2. Deshabilitar botón y mostrar spinner
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                // 3. Llamar a la API
+                const response = await fetch(`${API_URL}/productos/${productoId}/toggle_availability/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ available: newAvailability ? 1 : 0 })
+                });
+                
+                if (!response.ok) {
+                    // Si la API falla, lanzamos un error
+                    throw new Error('El estado no se pudo actualizar');
+                }
+                
+                // 4. Éxito: Ocultar modal y recargar lista
+                productModalBS.hide();
+                const activeButton = document.querySelector('.filter-btn.active');
+                const category = activeButton ? activeButton.dataset.category : 'all';
+                loadProducts(category); // Recargamos para que se vea el cambio
+
+            } catch (error) {
+                // 5. Error: Mostrar "Error" en el botón
+                console.error(error);
+                buttonElement.innerHTML = 'Error';
+                buttonElement.className = 'btn btn-danger'; // Cambia a color rojo
+
+                // Revertir el botón después de 2 segundos
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalHtml;
+                    buttonElement.className = originalClasses;
+                    buttonElement.disabled = false;
+                }, 2000);
+            }
+        };
+        // --- SCRIPT DE ARRANQUE (EL GUARDIÁN) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            productModalBS = new bootstrap.Modal(document.getElementById('productModal'));
+            try {
+                const response = await fetch(`${API_URL}/auth/me/`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    usuarioLogueado = await response.json();
+                    
+                    // --- (ACTUALIZADO) ---
+                    if (usuarioLogueado.role === 'staff' || usuarioLogueado.role === 'admin') {
+                        console.log(`Acceso de ${usuarioLogueado.role} concedido.`);
+                        // Llama a la nueva función de navbar
+                        setupNavbar(usuarioLogueado); 
+                        loadProducts('all');
+                        
+                        // Lógica para los filtros
+                        const filterButtons = document.querySelectorAll('.filter-btn');
+                        filterButtons.forEach(button => {
+                            button.addEventListener('click', () => {
+                                filterButtons.forEach(btn => btn.classList.remove('active'));
+                                button.classList.add('active');
+                                const category = button.dataset.category;
+                                loadProducts(category);
+                            });
+                        });
+                    } else {
+                        window.location.href = 'catalog-client.html'; // Echar al cliente
+                    }
+                } else {
+                    window.location.href = 'login.html'; // Echar si no hay sesión
+                }
+            } catch (error) {
+                window.location.href = 'login.html'; // Echar si hay error de red
+            }
+        });
+    </script>
 </body>
 </html>

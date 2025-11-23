@@ -78,5 +78,60 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    const API_URL = 'http://127.0.0.1:8000/api';
+    const registerForm = document.getElementById('registerForm');
+    
+    // Función para mostrar alertas (necesitarás un div <div id="alert-placeholder"></div>)
+    // O por ahora, solo usaremos 'alert()'
+    
+    const handleRegister = async (event) => {
+        event.preventDefault();
+        
+        const nameInput = document.getElementById('regName');
+        const emailInput = document.getElementById('regEmail');
+        const passwordInput = document.getElementById('regPassword');
+        // Tu API espera 'nombre', 'email', 'password'
+        // Tu formulario tiene 'regName', 'regEmail', 'regPassword'
+
+        const requestBody = {
+            nombre: nameInput.value,
+            email: emailInput.value,
+            password: passwordInput.value
+        };
+
+        try {
+            const response = await fetch(`${API_URL}/auth/register/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (response.status === 201) {
+                // Éxito
+                alert('¡Registro exitoso! Serás redirigido para iniciar sesión.');
+                window.location.href = 'login.html';
+            } else {
+                // Error (ej: email ya existe)
+                const errorData = await response.json();
+                
+                // Buscamos un error específico de email
+                if (errorData.email) {
+                    alert('Error: ' + errorData.email[0]);
+                } else {
+                    alert('Error en el registro. Intenta de nuevo.');
+                }
+                console.error('Error en registro:', errorData);
+            }
+
+        } catch (error) {
+            console.error('Error de red:', error);
+            alert('No se pudo conectar con el servidor.');
+        }
+    };
+
+    // Conectamos la función al formulario
+    registerForm.addEventListener('submit', handleRegister);
+    </script>
 </body>
 </html>

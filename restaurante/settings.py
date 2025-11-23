@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
 
-    # Tus apps
+    # Tus appss
     'usuarios',
 ]
 
@@ -51,7 +51,6 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-   # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -134,10 +133,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Permite que el frontend (en 127.0.0.1:3001) haga peticiones
 CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:3001",
-    "http://localhost:3001",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",   # Alternativa para Live Server
+    "null"                     # ¡Importante! Si abres el .html desde el explorador
 ]
-# Permite que el frontend envíe cookies (para el login)
+
+# Esto ya lo tenías y es correcto, ¡déjalo!
 CORS_ALLOW_CREDENTIALS = True
 
 # --- Configuración de Django REST Framework ---

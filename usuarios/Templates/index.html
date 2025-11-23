@@ -86,5 +86,123 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = 'http://127.0.0.1:8000/api';
+
+        // Función para cerrar sesión
+        const handleLogout = async () => {
+            try {
+                await fetch(`${API_URL}/auth/logout/`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Error en logout:', error);
+            }
+            // Siempre redirigir al index después de logout
+            window.location.href = 'index.html';
+        };
+
+        // Al cargar la página, revisamos si el usuario está logueado
+        document.addEventListener('DOMContentLoaded', async () => {
+            const navMenu = document.getElementById('navMenu');
+            const heroButtons = document.querySelector('.welcome-hero .d-flex');
+            let usuarioLogueado = null;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/me/`, {
+                    method: 'GET',
+                    credentials: 'include' // ¡La clave! Envía la cookie de sesión
+                });
+
+                if (response.ok) {
+                    usuarioLogueado = await response.json();
+                }
+            } catch (error) {
+                console.log('No se pudo verificar la sesión (API caída).', error);
+            }
+
+            // Limpiamos los menús actuales
+            navMenu.innerHTML = '';
+            heroButtons.innerHTML = '';
+
+            if (usuarioLogueado) {
+                // --- Usuario LOGUEADO ---
+                const welcomeName = usuarioLogueado.first_name || usuarioLogueado.email;
+
+                // 1. Actualizar Navbar
+                if (usuarioLogueado.role === 'staff' || usuarioLogueado.role === 'admin') {
+                    navMenu.innerHTML = `
+                        <li class="nav-item">
+                            <a class="nav-link" href="catalog-staff.html">Panel de Staff</a>
+                        </li>
+                    `;
+                } else {
+                    navMenu.innerHTML = `
+                        <li class="nav-item">
+                            <a class="nav-link" href="catalog-client.html">Ver Menú</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="orders.html">Mis Pedidos</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="cart.html">Carrito</a>
+                        </li>
+                    `;
+                }
+                navMenu.innerHTML += `
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            Hola, ${welcomeName}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="profile.html">Mi Perfil</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" id="logoutButton">Cerrar Sesión</a></li>
+                        </ul>
+                    </li>
+                `;
+
+                // 2. Actualizar Botones del Hero
+                const menuLink = (usuarioLogueado.role === 'staff' || usuarioLogueado.role === 'admin') ? 'catalog-staff.html' : 'catalog-client.html';
+                heroButtons.innerHTML = `
+                    <a href="${menuLink}" class="btn btn-light btn-lg btn-rounded px-5 shadow">
+                        <i class="fas fa-book-open me-2"></i> Ver Menú
+                    </a>
+                    <a href="#" id="logoutButtonHero" class="btn btn-outline-light btn-lg btn-rounded px-5">
+                        <i class="fas fa-sign-out-alt me-2"></i> Cerrar Sesión
+                    </a>
+                `;
+
+                // Asignar el evento de logout a los nuevos botones
+                document.getElementById('logoutButton')?.addEventListener('click', handleLogout);
+                document.getElementById('logoutButtonHero')?.addEventListener('click', handleLogout);
+
+            } else {
+                // --- Usuario NO LOGUEADO (Default) ---
+                // 1. Actualizar Navbar
+                navMenu.innerHTML = `
+                    <li class="nav-item">
+                        <a class="nav-link" href="catalog-client.html">Ver Menú</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="login.html">Iniciar Sesión</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="register.html">Regístrate</a>
+                    </li>
+                `;
+                // 2. Actualizar Botones del Hero
+                heroButtons.innerHTML = `
+                    <a href="catalog-client.html" class="btn btn-light btn-lg btn-rounded px-5 shadow">
+                        <i class="fas fa-book-open me-2"></i> Ver Menú
+                    </a>
+                    <a href="login.html" class="btn btn-outline-light btn-lg btn-rounded px-5">
+                        <i class="fas fa-sign-in-alt me-2"></i> Iniciar Sesión
+                    </a>
+                `;
+            }
+        });
+    </script>
 </body>
 </html>
