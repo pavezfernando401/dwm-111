@@ -37,12 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    # Apps de terceros
     'rest_framework',
     'corsheaders',
-
-    # Tus appss
     'usuarios',
 ]
 
@@ -76,22 +72,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'restaurante.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'al_sahara_db',   # ¡Tu base de datos!
-        'USER': 'root',          # Tu usuario de MySQL
-        'PASSWORD': '1234',          # Tu contraseña de MySQL
-        'HOST': 'localhost',
+        'NAME': 'al_sahara_db', 
+        'USER': 'root',          
+        'PASSWORD': '1234',          
         'PORT': '3306',
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -109,9 +101,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
@@ -121,39 +110,38 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_URL = 'static/'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Permite que el frontend (en 127.0.0.1:3001) haga peticiones
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
     "http://localhost:5500",
-    "http://127.0.0.1:5500",   # Alternativa para Live Server
-    "null"                     # ¡Importante! Si abres el .html desde el explorador
+    "http://127.0.0.1:5500",  
+    "null"                     
 ]
 
-# Esto ya lo tenías y es correcto, ¡déjalo!
 CORS_ALLOW_CREDENTIALS = True
 
-# --- Configuración de Django REST Framework ---
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        # Esto permite que la API use las sesiones creadas por login()
         'rest_framework.authentication.SessionAuthentication', 
     ],
 }
 
-# Define explícitamente el backend de autenticación
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_HOST_USER = 'soporte@alsahara.cl'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'pavezfernando501@gmail.com'
+EMAIL_HOST_PASSWORD = 'andg dyiu wsru bkkh'
+DEFAULT_FROM_EMAIL = 'Al Sahara <pavezfernando501@gmail.com>'

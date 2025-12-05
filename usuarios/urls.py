@@ -19,11 +19,11 @@ urlpatterns = [
     path('auth/login/', views.login_view, name='login'),
     path('auth/logout/', views.logout_view, name='logout'),
     path('auth/me/', views.me_view, name='me'),
-    
-    # --- Vista específica de Staff (no es ViewSet) ---
+    path('auth/password-reset/', views.password_reset_request, name='password-reset'),
+    path('auth/password-reset-confirm/', views.password_reset_confirm, name='password-reset-confirm'),
     path('productos/<int:pk>/toggle_availability/', views.toggle_product_availability, name='toggle-availability'),
-
-    # --- Incluimos las URLs del router ---
-    # Esto agrega todas las URLs que el router generó (paso 1)
     path('', include(router.urls)),
+    path('reports/stats/', views.dashboard_stats, name='dashboard-stats'),
+    path('auth/profile/update/', views.update_profile, name='profile-update'),
+    path('auth/change-password/', views.change_password, name='change-password'),
 ]
